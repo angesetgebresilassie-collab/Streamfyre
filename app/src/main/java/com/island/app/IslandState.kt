@@ -1,5 +1,6 @@
 package com.island.app
 
+import android.graphics.Bitmap
 import kotlinx.coroutines.flow.MutableStateFlow
 
 data class MusicInfo(
@@ -7,6 +8,7 @@ data class MusicInfo(
     val artist: String,
     val playing: Boolean,
     val pkg: String?,
+    val art: Bitmap?,
 )
 
 data class ChargeInfo(
