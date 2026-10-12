@@ -19,17 +19,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
+        id: java
         with:
           distribution: temurin
           java-version: 17
 
       - uses: android-actions/setup-android@v3
+        id: sdk
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.9
+      - name: Install Gradle 8.9
+        id: gradle
+        run: |
+          curl -sSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo "/opt/gradle-8.9/bin" >> "$GITHUB_PATH"
 
       - name: Build debug APK
+        id: build
         run: |
           set -o pipefail
           gradle assembleDebug --stacktrace 2>&1 | tee build.log
@@ -44,6 +50,7 @@ jobs:
         run: |
           {
             echo "status: ${{ job.status }}"
+            echo "steps: java=${{ steps.java.outcome }} sdk=${{ steps.sdk.outcome }} gradle=${{ steps.gradle.outcome }} build=${{ steps.build.outcome }}"
             echo "commit: ${GITHUB_SHA}"
             echo "run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo
