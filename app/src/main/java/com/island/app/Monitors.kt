@@ -4,12 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.media.AudioRecordingConfiguration
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
@@ -36,11 +39,16 @@ class RecordingWatcher(ctx: Context) {
     }
 }
 
-/** Tracks the active media session. Requires notification access to be granted. */
+/** Tracks the active media session (title, artist, artwork). Needs notification access. */
 class MediaWatcher(private val ctx: Context) {
     private val msm = ctx.getSystemService(MediaSessionManager::class.java)
     private val component = ComponentName(ctx, IslandNotificationListener::class.java)
     private var controllers: List<MediaController> = emptyList()
+
+    // Artwork cache so repeated metadata callbacks don't re-scale/re-decode.
+    private var lastSrc: Bitmap? = null
+    private var lastUri: String? = null
+    private var lastArt: Bitmap? = null
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
@@ -98,7 +106,62 @@ class MediaWatcher(private val ctx: Context) {
             artist = artist,
             playing = c.playbackState?.state == PlaybackState.STATE_PLAYING,
             pkg = c.packageName,
+            art = artworkFor(md),
         )
+    }
+
+    private fun artworkFor(md: MediaMetadata?): Bitmap? {
+        if (md == null) return null
+
+        val src = md.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        if (src != null) {
+            if (src === lastSrc) return lastArt
+            lastSrc = src
+            lastUri = null
+            lastArt = scaled(src)
+            return lastArt
+        }
+
+        val uri = md.getString(MediaMetadata.METADATA_KEY_ART_URI)
+            ?: md.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
+            ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+        if (uri != null) {
+            if (uri == lastUri) return lastArt
+            lastUri = uri
+            lastSrc = null
+            lastArt = loadLocalUri(uri)
+            return lastArt
+        }
+        return null
+    }
+
+    private fun scaled(b: Bitmap): Bitmap {
+        val max = 256
+        val longest = maxOf(b.width, b.height)
+        if (longest <= max) return b
+        val s = max.toFloat() / longest
+        return Bitmap.createScaledBitmap(
+            b,
+            (b.width * s).toInt().coerceAtLeast(1),
+            (b.height * s).toInt().coerceAtLeast(1),
+            true,
+        )
+    }
+
+    /** Only content:// and file:// art is loaded here (no network access from this process). */
+    private fun loadLocalUri(uri: String): Bitmap? {
+        return try {
+            val u = Uri.parse(uri)
+            if (u.scheme != "content" && u.scheme != "file") {
+                null
+            } else {
+                ctx.contentResolver.openInputStream(u)?.use { BitmapFactory.decodeStream(it) }?.let { scaled(it) }
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 }
 
