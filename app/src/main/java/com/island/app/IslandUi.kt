@@ -1,5 +1,6 @@
 package com.island.app
 
+import android.graphics.Bitmap
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -10,6 +11,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -38,9 +40,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +54,7 @@ import java.util.Locale
 private val Green = Color(0xFF30D158)
 private val Red = Color(0xFFFF453A)
 private val Dim = Color(0xFF8E8E93)
+private val ArtPlaceholder = Color(0xFF2C2C2E)
 
 @Composable
 fun IslandRoot() {
@@ -96,23 +102,26 @@ private fun Collapsed(music: MusicInfo?, recording: Boolean, charging: ChargeInf
     Row(
         modifier = Modifier
             .heightIn(min = 34.dp)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (recording) RecDot()
         if (music != null && music.playing) {
-            Text(
-                text = "\u266A  ${music.title}",
-                color = Color.White,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 110.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Artwork(music.art, size = 22.dp, radius = 6.dp)
+                Text(
+                    text = music.title,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 100.dp),
+                )
+            }
         }
         if (charging != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 6.dp)) {
                 Text("\u26A1 ", color = Green, fontSize = 12.sp)
                 DecimalCounter(charging.watts, decimals = 2, color = Green, size = 12.sp)
                 Text(" W", color = Green, fontSize = 12.sp)
@@ -129,6 +138,35 @@ private fun Expanded(music: MusicInfo?, recording: Boolean, charging: ChargeInfo
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (music != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Artwork(music.art, size = 56.dp, radius = 12.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        music.title,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val sub = listOf(music.artist, if (music.playing) "" else "Paused").filter { it.isNotBlank() }
+                    if (sub.isNotEmpty()) {
+                        Text(
+                            sub.joinToString(" \u00B7 "),
+                            color = Dim,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
         if (charging != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -149,27 +187,33 @@ private fun Expanded(music: MusicInfo?, recording: Boolean, charging: ChargeInfo
                 Text("${charging.percent}%", color = Green, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        if (music != null) {
-            Column {
-                Text(
-                    music.title,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val sub = listOf(music.artist, if (music.playing) "" else "Paused").filter { it.isNotBlank() }
-                if (sub.isNotEmpty()) {
-                    Text(sub.joinToString(" \u00B7 "), color = Dim, fontSize = 13.sp, maxLines = 1)
-                }
-            }
-        }
         if (recording) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 RecDot()
                 Text("Audio is being recorded", color = Color.White, fontSize = 14.sp)
             }
+        }
+    }
+}
+
+/** Album art, or a neutral placeholder tile when the player provides none. */
+@Composable
+private fun Artwork(bitmap: Bitmap?, size: Dp, radius: Dp) {
+    val shape = RoundedCornerShape(radius)
+    if (bitmap != null) {
+        val image = remember(bitmap) { bitmap.asImageBitmap() }
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(size).clip(shape),
+        )
+    } else {
+        Box(
+            modifier = Modifier.size(size).clip(shape).background(ArtPlaceholder),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("\u266A", color = Dim, fontSize = (size.value * 0.5f).sp)
         }
     }
 }
