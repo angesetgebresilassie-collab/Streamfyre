@@ -5,6 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,9 +30,35 @@ jobs:
           gradle-version: 8.9
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug --stacktrace 2>&1 | tee build.log
 
       - uses: actions/upload-artifact@v4
         with:
           name: island-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publish build result to build-log branch
+        if: always()
+        run: |
+          {
+            echo "status: ${{ job.status }}"
+            echo "commit: ${GITHUB_SHA}"
+            echo "run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|What went wrong|FAILED|Caused by" -A4 build.log | head -n 150 || true
+              echo
+              echo "---- tail ----"
+              tail -n 60 build.log
+            fi
+          } > /tmp/BUILD_LOG.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan build-log
+          git rm -rf . -q
+          cp /tmp/BUILD_LOG.txt BUILD_LOG.txt
+          git add BUILD_LOG.txt
+          git commit -m "Build result for ${GITHUB_SHA}"
+          git push -f origin build-log
