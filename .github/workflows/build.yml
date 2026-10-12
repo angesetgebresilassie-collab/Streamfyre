@@ -24,8 +24,12 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      - name: Prepare Android SDK
         id: sdk
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-35" "build-tools;34.0.0" > /dev/null || true
 
       - name: Install Gradle 8.9
         id: gradle
